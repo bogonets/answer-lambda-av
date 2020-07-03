@@ -1,0 +1,125 @@
+{
+    "info": {
+        "name": "av_stream_video",
+        "version": "1.0.0",
+        "category": "av",
+        "keywords": ["av"],
+        "homepage": "https://answer.bogonets.com/",
+        "bugs": "https://answer.bogonets.com/",
+        "license": "Bogonet License",
+        "author": "zer0",
+        "dependencies": [
+            {"type": "pip", "src": "av"}
+        ],
+        "engines": ">=1.1.6",
+        "environment": {
+            "type": "pyenv",
+            "name": "av"
+        },
+        "titles": {
+            "en": "av.stream_video",
+            "ko": "av.stream_video"
+        },
+        "descriptions": {
+            "en": "Stream Video.",
+            "ko": "비디오 스트리밍."
+        },
+        "documentation_mime": "text",
+        "documentations": {},
+        "meta": {}
+    },
+    "controls": {
+        "output": [
+            {
+                "name": "frame",
+                "mimes": ["image/jpeg", "image/png"]
+            }
+        ]
+    },
+    "props": [
+        {
+            "rule": "initialize_only",
+            "name": "src",
+            "default_value": "",
+            "type": "str",
+            "required": true,
+            "valid": {},
+            "title": {
+                "en": "Source",
+                "ko": "원본"
+            },
+            "help": {
+                "en": "Source video address.",
+                "ko": "원본 비디오 주소."
+            }
+        },
+        {
+            "rule": "initialize_only",
+            "name": "video_index",
+            "default_value": "0",
+            "type": "int",
+            "required": true,
+            "valid": {},
+            "title": {
+                "en": "Video Index",
+                "ko": "비디오 색인 번호"
+            },
+            "help": {
+                "en": "Index number of the video stream.",
+                "ko": "비디오 스트림의 색인 번호."
+            }
+        },
+        {
+            "rule": "initialize_only",
+            "name": "frame_format",
+            "default_value": "bgr24",
+            "type": "str",
+            "required": true,
+            "valid": {
+                "list": "bgr24;rgb24"
+            },
+            "title": {
+                "en": "Frame Format",
+                "ko": "프레임 포맷"
+            },
+            "help": {
+                "en": "The format of still images.",
+                "ko": "정지 영상의 포맷."
+            }
+        },
+        {
+            "rule": "initialize_only",
+            "name": "options",
+            "default_value": "",
+            "type": "csv",
+            "required": false,
+            "valid": {
+                "hint": "rtsp_transport=tcp;rtsp_transport=udp"
+            },
+            "title": {
+                "en": "Options",
+                "ko": "옵션"
+            },
+            "help": {
+                "en": "Options to pass to the container and all streams.",
+                "ko": "컨테이너 및 전체 스트림에 전달할 옵션 목록."
+            }
+        },
+        {
+            "rule": "initialize_only",
+            "name": "reopen",
+            "default_value": "true",
+            "type": "bool",
+            "required": false,
+            "valid": {},
+            "title": {
+                "en": "Reopen Flag",
+                "ko": "재연결 플래그"
+            },
+            "help": {
+                "en": "If video frame acquisition fails, reconnect.",
+                "ko": "비디오 프레임 획득에 실패하면 재연결한다."
+            }
+        }
+    ]
+}
