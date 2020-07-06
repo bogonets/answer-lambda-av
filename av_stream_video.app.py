@@ -1,22 +1,32 @@
 # -*- coding: utf-8 -*-
 
 from functools import reduce
-import sys
-import numpy as np
-import av
 
+import sys
+import multiprocessing as mp
+from multiprocessing.sharedctypes import Value
+from ctypes import c_bool
+import numpy as np
+from queue import Empty
+
+import av_stream_video_server
+
+
+DEFAULT_MAX_QUEUE_SIZE = 4
+DEFAULT_EXIT_TIMEOUT_SECONDS = 4.0
 
 src = ''
 video_index = 0
 frame_format = 'bgr24'
 options = {}
 reopen = False
+max_queue_size = DEFAULT_MAX_QUEUE_SIZE
+exit_timeout_seconds = DEFAULT_EXIT_TIMEOUT_SECONDS
 
-container = None
-frames = None
-last_frame = np.zeros((300, 300, 3), dtype=np.uint8)
-last_pts = 0
-last_index = 0
+
+def print_out(message):
+    sys.stdout.write(message)
+    sys.stdout.flush()
 
 
 def print_error(message):
@@ -48,45 +58,6 @@ def dict_to_str(items: dict, item_split=';', kv_split='='):
                   [str(k)+kv_split+str(v) for k, v in items.items()])
 
 
-def is_opened_video():
-    return container is not None
-
-
-def close_video():
-    global container
-    global frames
-
-    try:
-        if container is not None:
-            container.close()
-    except Exception as e:
-        print_error(e)
-
-    container = None
-    frames = None
-
-
-def open_video():
-    try:
-        global src
-        global video_index
-        global options
-        global container
-        global frames
-        container = av.open(src, options=options)
-        container.streams.video[video_index].thread_type = 'AUTO'  # Go faster!
-        frames = container.decode(video=video_index)
-        return True
-    except Exception as e:
-        print_error(e)
-        return False
-
-
-def reopen_video():
-    close_video()
-    return open_video()
-
-
 def on_set(key, val):
     if key == 'src':
         global src
@@ -103,6 +74,12 @@ def on_set(key, val):
     elif key == 'reopen':
         global reopen
         reopen = bool(val)
+    elif key == 'max_queue_size':
+        global max_queue_size
+        max_queue_size = int(val)
+    elif key == 'exit_timeout_seconds':
+        global exit_timeout_seconds
+        exit_timeout_seconds = float(val)
 
 
 def on_get(key):
@@ -116,39 +93,93 @@ def on_get(key):
         return dict_to_str(options)
     elif key == 'reopen':
         return str(reopen)
+    elif key == 'max_queue_size':
+        return str(max_queue_size)
+    elif key == 'exit_timeout_seconds':
+        return str(exit_timeout_seconds)
+
+
+EMPTY_ARRAY = np.zeros((300, 300, 3), dtype=np.uint8)
+av_process: mp.Process
+av_queue: mp.Queue
+av_exit: Value
+av_last_data = EMPTY_ARRAY
+
+
+def run_process():
+    global max_queue_size
+    queue_size = max_queue_size if max_queue_size > 0 else DEFAULT_MAX_QUEUE_SIZE
+
+    global av_process, av_queue, av_exit
+    global src, video_index, frame_format, options, reopen
+
+    av_queue = mp.Queue(queue_size)
+    av_exit = Value(c_bool, False)
+    av_process = mp.Process(target=av_stream_video_server.on_runner,
+                            args=(av_queue, av_exit, src, video_index, frame_format, options, reopen,))
+    av_process.start()
+
+    print_out(f'av.stream_video process PID is {av_process.pid}.')
+    return av_process.is_alive()
+
+
+def close_process():
+    global av_exit
+    av_exit = True
+
+    global exit_timeout_seconds
+    timeout = exit_timeout_seconds if exit_timeout_seconds > 0.0 else DEFAULT_EXIT_TIMEOUT_SECONDS
+
+    global av_process
+    print_out(f'av.stream_video(pid={av_process.pid}) Join(timeout={timeout}s) ...')
+    av_process.join(timeout=timeout)
+
+    global av_queue
+    av_queue.close()
+    av_queue.cancel_join_thread()
+    av_queue = None
+
+    if av_process.is_alive():
+        print_error(f'av.stream_video(pid={av_process.pid}) Kill ...')
+        av_process.kill()
+
+    # A negative value -N indicates that the child was terminated by signal N.
+    print_out(f'av.stream_video(pid={av_process.pid}) Exit Code: {av_process.exitcode}')
+
+    av_process.close()
+    av_process = None
+
+
+def pop_array():
+    global av_queue, av_last_data
+    try:
+        data = av_queue.get_nowait()
+    except Empty:
+        data = None
+
+    if data is not None:
+        av_last_data = data
+
+    return av_last_data
 
 
 def on_init():
-    return reopen_video()
+    return run_process()
 
 
 def on_valid():
-    return is_opened_video()
+    global av_process
+    return av_process.is_alive()
 
 
 def on_run():
-    global frame_format
-    global frames
-    global last_frame
-    global last_pts
-    global last_index
-
-    try:
-        frame = next(frames)
-        last_frame = frame.to_ndarray(format=frame_format)
-        last_pts = frame.pts
-        last_index = frame.index
-    except Exception as e:
-        print_error(e)
-        if reopen:
-            reopen_video()
-
-    return {"frame": last_frame}
+    return {'frame': pop_array()}
 
 
 def on_destroy():
-    close_video()
+    close_process()
 
 
 if __name__ == '__main__':
+    # test_default()
     pass

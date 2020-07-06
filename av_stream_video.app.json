@@ -14,7 +14,7 @@
         "engines": ">=1.1.6",
         "environment": {
             "type": "pyenv",
-            "name": "av"
+            "name": "rtc"
         },
         "titles": {
             "en": "av.stream_video",
