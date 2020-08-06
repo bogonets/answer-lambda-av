@@ -9,7 +9,9 @@
         "license": "Bogonet License",
         "author": "zer0",
         "dependencies": [
-            {"type": "pip", "src": "av"}
+            {"type": "pip", "src": "numpy"},
+            {"type": "pip", "src": "av"},
+            {"type": "pip", "src": "psutil"}
         ],
         "engines": ">=1.1.6",
         "environment": {
@@ -39,14 +41,14 @@
     "props": [
         {
             "rule": "initialize_only",
-            "name": "src",
+            "name": "video_src",
             "default_value": "",
             "type": "str",
             "required": true,
             "valid": {},
             "title": {
-                "en": "Source",
-                "ko": "원본"
+                "en": "Video Source",
+                "ko": "원본 비디오"
             },
             "help": {
                 "en": "Source video address.",
@@ -59,7 +61,9 @@
             "default_value": "0",
             "type": "int",
             "required": true,
-            "valid": {},
+            "valid": {
+                "advance": true
+            },
             "title": {
                 "en": "Video Index",
                 "ko": "비디오 색인 번호"
@@ -76,6 +80,7 @@
             "type": "str",
             "required": true,
             "valid": {
+                "advance": true,
                 "list": "bgr24;rgb24"
             },
             "title": {
@@ -94,6 +99,7 @@
             "type": "csv",
             "required": false,
             "valid": {
+                "advance": true,
                 "hint": "rtsp_transport=tcp;rtsp_transport=udp"
             },
             "title": {
@@ -107,18 +113,20 @@
         },
         {
             "rule": "initialize_only",
-            "name": "reopen",
-            "default_value": "true",
+            "name": "verbose",
+            "default_value": false,
             "type": "bool",
             "required": false,
-            "valid": {},
+            "valid": {
+                "advance": true
+            },
             "title": {
-                "en": "Reopen Flag",
-                "ko": "재연결 플래그"
+                "en": "Verbose",
+                "ko": "상세한"
             },
             "help": {
-                "en": "If video frame acquisition fails, reconnect.",
-                "ko": "비디오 프레임 획득에 실패하면 재연결한다."
+                "en": "Verbose Logging",
+                "ko": "상세 로깅"
             }
         }
     ]
