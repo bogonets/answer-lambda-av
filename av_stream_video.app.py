@@ -39,7 +39,7 @@ def split_option(text: str, kv_split='='):
     return text[0:i].strip(), text[i+1:].strip()
 
 
-def str_to_dict(text: str, item_split=';', kv_split='='):
+def str_to_dict(text: str, item_split=',', kv_split='='):
     items = [x for x in text.split(item_split)]
     items = list(filter(lambda x: x.strip(), items))
     result = {}
@@ -51,7 +51,7 @@ def str_to_dict(text: str, item_split=';', kv_split='='):
     return result
 
 
-def dict_to_str(items: dict, item_split=';', kv_split='='):
+def dict_to_str(items: dict, item_split=',', kv_split='='):
     return reduce(lambda x, y: x+item_split+y,
                   [str(k)+kv_split+str(v) for k, v in items.items()])
 
