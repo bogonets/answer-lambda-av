@@ -72,23 +72,32 @@ class StreamVideo:
                  video_src='',
                  video_index=0,
                  frame_format=vs.DEFAULT_FRAME_FORMAT,
+                 frame_width=0,
+                 frame_height=0,
+                 frame_interpolation=vs.INTERPOLATION_LIST[1],
                  options={},
                  container_options={},
                  stream_options=[],
                  reconnect_sleep=vs.RECONNECT_SLEEP,
                  max_queue_size=DEFAULT_MAX_QUEUE_SIZE,
                  exit_timeout_seconds=vs.DEFAULT_EXIT_TIMEOUT_SECONDS,
-                 verbose=False):
+                 verbose=False,
+                 low_delay=False):
         self.video_src = video_src
         self.video_index = video_index
         self.frame_format = frame_format
+        self.frame_width = frame_width
+        self.frame_height = frame_height
+        self.frame_interpolation = frame_interpolation
         self.options = options
         self.container_options = container_options
         self.stream_options = stream_options
         self.reconnect_sleep = reconnect_sleep
+        self.iteration_sleep = vs.ITERATION_SLEEP
         self.max_queue_size = max_queue_size
         self.exit_timeout_seconds = exit_timeout_seconds
         self.verbose = verbose
+        self.low_delay = low_delay
 
         self.last_image = None
         self.exit_flag = Value(c_bool, False)
@@ -103,6 +112,12 @@ class StreamVideo:
             self.video_index = int(val)
         elif key == 'frame_format':
             self.frame_format = val
+        elif key == 'frame_width':
+            self.frame_width = int(val)
+        elif key == 'frame_height':
+            self.frame_height = int(val)
+        elif key == 'frame_interpolation':
+            self.frame_interpolation = val
         elif key == 'options':
             self.options = str_to_dict(str(val))
         elif key == 'container_options':
@@ -115,6 +130,8 @@ class StreamVideo:
             self.exit_timeout_seconds = float(val)
         elif key == 'verbose':
             self.verbose = val.lower() in ['y', 'yes', 'true']
+        elif key == 'low_delay':
+            self.low_delay = val.lower() in ['y', 'yes', 'true']
 
     def on_get(self, key):
         if key == 'video_src':
@@ -123,6 +140,12 @@ class StreamVideo:
             return str(self.video_index)
         elif key == 'frame_format':
             return self.frame_format
+        elif key == 'frame_width':
+            return self.frame_width
+        elif key == 'frame_height':
+            return self.frame_height
+        elif key == 'frame_interpolation':
+            return self.frame_interpolation
         elif key == 'options':
             return dict_to_str(self.options)
         elif key == 'container_options':
@@ -135,6 +158,8 @@ class StreamVideo:
             return str(self.exit_timeout_seconds)
         elif key == 'verbose':
             return str(self.verbose)
+        elif key == 'low_delay':
+            return str(self.low_delay)
 
     def get_last_image(self):
         try:
@@ -149,10 +174,12 @@ class StreamVideo:
 
         self.queue = Queue(self.max_queue_size)
         self.process = Process(target=vs.start_app,
-                               args=(self.queue, self.exit_flag, self.video_src,
-                                     self.video_index, self.frame_format, self.options,
+                               args=(self.queue, self.exit_flag, self.video_src, self.video_index,
+                                     self.frame_format, self.frame_width, self.frame_height,
+                                     self.frame_interpolation, self.options,
                                      self.container_options, self.stream_options,
-                                     self.reconnect_sleep, self.verbose,))
+                                     self.reconnect_sleep, self.iteration_sleep,
+                                     self.verbose, self.low_delay,))
 
         self.process.start()
         if self.process.is_alive():

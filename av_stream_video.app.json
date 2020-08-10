@@ -61,9 +61,7 @@
             "default_value": "0",
             "type": "int",
             "required": true,
-            "valid": {
-                "advance": true
-            },
+            "valid": {},
             "title": {
                 "en": "Video Index",
                 "ko": "비디오 색인 번호"
@@ -94,13 +92,68 @@
         },
         {
             "rule": "initialize_only",
+            "name": "frame_width",
+            "default_value": 0,
+            "type": "int",
+            "required": false,
+            "valid": {
+                "advance": true
+            },
+            "title": {
+                "en": "Frame width",
+                "ko": "프레임 너비"
+            },
+            "help": {
+                "en": "The width of still images.",
+                "ko": "정지 영상의 너비."
+            }
+        },
+        {
+            "rule": "initialize_only",
+            "name": "frame_height",
+            "default_value": 0,
+            "type": "int",
+            "required": false,
+            "valid": {
+                "advance": true
+            },
+            "title": {
+                "en": "Frame height",
+                "ko": "프레임 높이"
+            },
+            "help": {
+                "en": "The height of still images.",
+                "ko": "정지 영상의 높이."
+            }
+        },
+        {
+            "rule": "initialize_only",
+            "name": "frame_interpolation",
+            "default_value": "BILINEAR",
+            "type": "str",
+            "required": false,
+            "valid": {
+                "advance": true,
+                "list": "FAST_BILINEAR;BILINEAR;BICUBIC;X;POINT;AREA;BICUBLIN;GAUSS;SINC;LANCZOS;SPLINE"
+            },
+            "title": {
+                "en": "Frame Interpolation",
+                "ko": "프레임 보간법"
+            },
+            "help": {
+                "en": "Interpolation method used by the scaler.",
+                "ko": "스케일러가 사용할 보간법."
+            }
+        },
+        {
+            "rule": "initialize_only",
             "name": "options",
             "default_value": "",
             "type": "csv",
             "required": false,
             "valid": {
                 "advance": true,
-                "hint": "rtsp_transport=tcp;rtsp_transport=udp"
+                "hint": "rtsp_transport=tcp;rtsp_transport=udp;fflags=nobuffer"
             },
             "title": {
                 "en": "Options",
@@ -127,6 +180,24 @@
             "help": {
                 "en": "Verbose Logging",
                 "ko": "상세 로깅"
+            }
+        },
+        {
+            "rule": "initialize_only",
+            "name": "low_delay",
+            "default_value": false,
+            "type": "bool",
+            "required": false,
+            "valid": {
+                "advance": true
+            },
+            "title": {
+                "en": "Low delay",
+                "ko": "낮은 지연시간"
+            },
+            "help": {
+                "en": "this codec generic flag will force low delay.",
+                "ko": "낮은 지연시간을 강제한다."
             }
         }
     ]
