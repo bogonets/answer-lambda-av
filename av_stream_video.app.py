@@ -68,42 +68,29 @@ class StreamVideo:
     """
     """
 
-    def __init__(self,
-                 video_src='',
-                 video_index=0,
-                 frame_format=vs.DEFAULT_FRAME_FORMAT,
-                 frame_width=0,
-                 frame_height=0,
-                 frame_interpolation=vs.INTERPOLATION_LIST[1],
-                 options={},
-                 container_options={},
-                 stream_options=[],
-                 reconnect_sleep=vs.RECONNECT_SLEEP,
-                 max_queue_size=DEFAULT_MAX_QUEUE_SIZE,
-                 exit_timeout_seconds=vs.DEFAULT_EXIT_TIMEOUT_SECONDS,
-                 verbose=False,
-                 low_delay=False):
-        self.video_src = video_src
-        self.video_index = video_index
-        self.frame_format = frame_format
-        self.frame_width = frame_width
-        self.frame_height = frame_height
-        self.frame_interpolation = frame_interpolation
-        self.options = options
-        self.container_options = container_options
-        self.stream_options = stream_options
-        self.reconnect_sleep = reconnect_sleep
-        self.iteration_sleep = vs.ITERATION_SLEEP
-        self.max_queue_size = max_queue_size
-        self.exit_timeout_seconds = exit_timeout_seconds
-        self.verbose = verbose
-        self.low_delay = low_delay
+    def __init__(self, *args, **kwargs):
+        self.video_src: str = vs.opt_kwargs(kwargs, 'video_src', '')
+        self.video_index: int = vs.opt_kwargs(kwargs, 'video_index', 0)
+        self.frame_format: str = vs.opt_kwargs(kwargs, 'frame_format', vs.DEFAULT_FRAME_FORMAT)
+        self.frame_width: int = vs.opt_kwargs(kwargs, 'frame_width', 0)
+        self.frame_height: int = vs.opt_kwargs(kwargs, 'frame_height', 0)
+        self.frame_interpolation: str = vs.opt_kwargs(kwargs, 'frame_interpolation', vs.INTERPOLATION_LIST[1])
+        self.options: dict = vs.opt_kwargs(kwargs, 'options', {})
+        self.container_options: dict = vs.opt_kwargs(kwargs, 'container_options', {})
+        self.stream_options: list = vs.opt_kwargs(kwargs, 'stream_options', [])
+        self.reconnect_sleep: float = vs.opt_kwargs(kwargs, 'reconnect_sleep', vs.RECONNECT_SLEEP)
+        self.iteration_sleep: float = vs.opt_kwargs(kwargs, 'iteration_sleep', vs.ITERATION_SLEEP)
+        self.verbose: bool = vs.opt_kwargs(kwargs, 'verbose', False)
+        self.low_delay: bool = vs.opt_kwargs(kwargs, 'low_delay', False)
 
-        self.last_image = None
-        self.exit_flag = Value(c_bool, False)
+        self.max_queue_size: int = vs.opt_kwargs(kwargs, 'max_queue_size', DEFAULT_MAX_QUEUE_SIZE)
+        self.exit_timeout_seconds: float = vs.opt_kwargs(kwargs, 'exit_timeout_seconds', vs.DEFAULT_EXIT_TIMEOUT_SECONDS)
+
         self.process: Process = None
         self.queue: Queue = None
+        self.exit_flag = Value(c_bool, False)
         self.pid = UNKNOWN_PID
+        self.last_image = None
 
     def on_set(self, key, val):
         if key == 'video_src':
@@ -123,15 +110,19 @@ class StreamVideo:
         elif key == 'container_options':
             self.container_options = str_to_dict(str(val))
         elif key == 'stream_options':
-            self.stream_options = list(map(lambda x: x, str(val).split(',')))
-        elif key == 'max_queue_size':
-            self.max_queue_size = int(val)
-        elif key == 'exit_timeout_seconds':
-            self.exit_timeout_seconds = float(val)
+            self.stream_options = list(filter(lambda x: x.strip(), str(val).split(',')))
+        elif key == 'reconnect_sleep':
+            self.reconnect_sleep = float(val)
+        elif key == 'iteration_sleep':
+            self.iteration_sleep = float(val)
         elif key == 'verbose':
             self.verbose = val.lower() in ['y', 'yes', 'true']
         elif key == 'low_delay':
             self.low_delay = val.lower() in ['y', 'yes', 'true']
+        elif key == 'max_queue_size':
+            self.max_queue_size = int(val)
+        elif key == 'exit_timeout_seconds':
+            self.exit_timeout_seconds = float(val)
 
     def on_get(self, key):
         if key == 'video_src':
@@ -152,14 +143,18 @@ class StreamVideo:
             return dict_to_str(self.container_options)
         elif key == 'stream_options':
             return ','.join(list(map(lambda x: str(x), self.stream_options)))
-        elif key == 'max_queue_size':
-            return str(self.max_queue_size)
-        elif key == 'exit_timeout_seconds':
-            return str(self.exit_timeout_seconds)
+        elif key == 'reconnect_sleep':
+            return self.reconnect_sleep
+        elif key == 'iteration_sleep':
+            return self.iteration_sleep
         elif key == 'verbose':
             return str(self.verbose)
         elif key == 'low_delay':
             return str(self.low_delay)
+        elif key == 'max_queue_size':
+            return str(self.max_queue_size)
+        elif key == 'exit_timeout_seconds':
+            return str(self.exit_timeout_seconds)
 
     def get_last_image(self):
         try:
@@ -172,14 +167,24 @@ class StreamVideo:
         assert self.queue is None
         assert self.process is None
 
+        kwargs = {
+            'video_src': self.video_src,
+            'video_index': self.video_index,
+            'frame_format': self.frame_format,
+            'frame_width': self.frame_width,
+            'frame_height': self.frame_height,
+            'frame_interpolation': self.frame_interpolation,
+            'options': self.options,
+            'container_options': self.container_options,
+            'stream_options': self.stream_options,
+            'reconnect_sleep': self.reconnect_sleep,
+            'iteration_sleep': self.iteration_sleep,
+            'verbose': self.verbose,
+            'low_delay': self.low_delay,
+        }
+
         self.queue = Queue(self.max_queue_size)
-        self.process = Process(target=vs.start_app,
-                               args=(self.queue, self.exit_flag, self.video_src, self.video_index,
-                                     self.frame_format, self.frame_width, self.frame_height,
-                                     self.frame_interpolation, self.options,
-                                     self.container_options, self.stream_options,
-                                     self.reconnect_sleep, self.iteration_sleep,
-                                     self.verbose, self.low_delay,))
+        self.process = Process(target=vs.start_app, args=(self.queue, self.exit_flag,), kwargs=kwargs)
 
         self.process.start()
         if self.process.is_alive():
