@@ -13,6 +13,7 @@ EMPTY_IMAGE = np.zeros((300, 300, 3), dtype=np.uint8)
 DEFAULT_EXIT_TIMEOUT_SECONDS = 4.0
 RECONNECT_SLEEP = 1.0
 ITERATION_SLEEP = 0.001
+REFRESH_ERROR_THRESHOLD = 100
 DEFAULT_FRAME_FORMAT = 'bgr24'
 INTERPOLATION_LIST = [
     'FAST_BILINEAR',
@@ -53,9 +54,11 @@ class StreamVideoServer:
     """
 
     def __init__(self, *args, **kwargs):
-        assert len(args) == 2
+        assert len(args) == 1
         self.queue: Queue = args[0]
-        self.exit_flag: Value = args[1]
+
+        self.exit_flag: Value = opt_kwargs(kwargs, 'exit_flag')
+        self.refresh_flag: Value = opt_kwargs(kwargs, 'refresh_flag')
 
         self.video_src: str = opt_kwargs(kwargs, 'video_src', '')
         self.video_index: int = opt_kwargs(kwargs, 'video_index', 0)
@@ -170,6 +173,16 @@ class StreamVideoServer:
             self.open_video()
 
         while not self.exit_flag.value:
+
+            if self.refresh_flag.value:
+                print_out(f'StreamVideoServer.run() [REFRESH] -> Flag is is enabled.')
+                reconnect_result = self.reopen_video()
+                if reconnect_result:
+                    print_out(f'StreamVideoServer.run() [REFRESH] -> reconnect success.')
+                else:
+                    print_error(f'StreamVideoServer.run() [REFRESH] -> reconnect failure.')
+                self.refresh_flag = False
+
             # Read current frame.
             try:
                 self.read_next_frame()

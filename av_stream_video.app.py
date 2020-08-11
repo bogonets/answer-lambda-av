@@ -82,14 +82,19 @@ class StreamVideo:
         self.iteration_sleep: float = vs.opt_kwargs(kwargs, 'iteration_sleep', vs.ITERATION_SLEEP)
         self.verbose: bool = vs.opt_kwargs(kwargs, 'verbose', False)
         self.low_delay: bool = vs.opt_kwargs(kwargs, 'low_delay', False)
+        self.refresh_error_threshold: int = vs.opt_kwargs(kwargs, 'refresh_error_threshold', vs.REFRESH_ERROR_THRESHOLD)
 
         self.max_queue_size: int = vs.opt_kwargs(kwargs, 'max_queue_size', DEFAULT_MAX_QUEUE_SIZE)
         self.exit_timeout_seconds: float = vs.opt_kwargs(kwargs, 'exit_timeout_seconds', vs.DEFAULT_EXIT_TIMEOUT_SECONDS)
 
+        self.refresh_error_count = 0
+        self.refresh_flag = Value(c_bool, False)
+
         self.process: Process = None
-        self.queue: Queue = None
-        self.exit_flag = Value(c_bool, False)
         self.pid = UNKNOWN_PID
+
+        self.exit_flag = Value(c_bool, False)
+        self.queue: Queue = None
         self.last_image = None
 
     def on_set(self, key, val):
@@ -123,6 +128,8 @@ class StreamVideo:
             self.max_queue_size = int(val)
         elif key == 'exit_timeout_seconds':
             self.exit_timeout_seconds = float(val)
+        elif key == 'refresh_error_threshold':
+            self.refresh_error_threshold = int(val)
 
     def on_get(self, key):
         if key == 'video_src':
@@ -155,12 +162,29 @@ class StreamVideo:
             return str(self.max_queue_size)
         elif key == 'exit_timeout_seconds':
             return str(self.exit_timeout_seconds)
+        elif key == 'refresh_error_threshold':
+            return str(self.refresh_error_threshold)
+
+    def do_refresh_ok(self):
+        self.refresh_error_count = 0
+        # self.refresh_flag = False  #
+
+    def do_refresh_error(self):
+        if self.refresh_error_count < self.refresh_error_threshold:
+            self.refresh_error_count += 1
+            if self.verbose:
+                print_out(f'StreamVideo.do_refresh_error({self.refresh_error_count}/{self.refresh_error_threshold})')
+        else:
+            self.refresh_error_count = 0
+            self.refresh_flag = True
+            print_error(f'StreamVideo.do_refresh_error() Enable refresh_flag')
 
     def get_last_image(self):
         try:
             self.last_image = self.queue.get_nowait()
+            self.do_refresh_ok()
         except Empty:
-            pass
+            self.do_refresh_error()
         return self.last_image
 
     def _create_process_impl(self):
@@ -168,6 +192,8 @@ class StreamVideo:
         assert self.process is None
 
         kwargs = {
+            'exit_flag': self.exit_flag,
+            'refresh_flag': self.refresh_flag,
             'video_src': self.video_src,
             'video_index': self.video_index,
             'frame_format': self.frame_format,
@@ -184,7 +210,7 @@ class StreamVideo:
         }
 
         self.queue = Queue(self.max_queue_size)
-        self.process = Process(target=vs.start_app, args=(self.queue, self.exit_flag,), kwargs=kwargs)
+        self.process = Process(target=vs.start_app, args=(self.queue,), kwargs=kwargs)
 
         self.process.start()
         if self.process.is_alive():

@@ -307,6 +307,24 @@
                 "en": "Maximum waiting time when destroying lambdas. (seconds)",
                 "ko": "람다 파괴시 최대 대기 시간. (초)"
             }
+        },
+        {
+            "rule": "initialize_only",
+            "name": "refresh_error_threshold",
+            "default_value": 100,
+            "type": "int",
+            "required": false,
+            "valid": {
+                "advance": true
+            },
+            "title": {
+                "en": "Refresh error threshold",
+                "ko": "새로고침 오류 임계값"
+            },
+            "help": {
+                "en": "If the continuous error count exceeds the threshold, the video is reconnected.",
+                "ko": "연속 에러 카운트가 임계점을 초과하면 비디오를 재연결 한다."
+            }
         }
     ]
 }
