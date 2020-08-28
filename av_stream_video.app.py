@@ -32,6 +32,20 @@ def print_error(message):
     sys.stderr.flush()
 
 
+def kill_process(pid):
+    if not psutil.pid_exists(pid):
+        return
+
+    parent = psutil.Process(pid)
+
+    for child in parent.children(recursive=True):
+        print_out(f'kill children: {child.pid}')
+        child.kill()
+
+    print_out(f'Force kill PID: {parent.pid}')
+    parent.kill()
+
+
 def split_option(text: str, kv_split='='):
     i = text.find(kv_split)
     if i == -1:
@@ -258,9 +272,7 @@ class StreamVideo:
             self.process = None
 
         if self.pid >= 1:
-            if psutil.pid_exists(self.pid):
-                print_out(f'Force kill PID: {self.pid}')
-                psutil.Process(self.pid).kill()
+            kill_process(self.pid)
             self.pid = UNKNOWN_PID
 
         assert self.queue is None
