@@ -216,8 +216,10 @@ def start_app(*args, **kwargs):
     try:
         server = StreamVideoServer(*args, **kwargs)
         server.run()
+    except StopIteration:
+        print_error('StopIteration.')
     except Exception as e:
-        print_error(f'StreamVideoServer Exception: {e}')
+        print_error(f'Exception: {e}')
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()
     finally:
