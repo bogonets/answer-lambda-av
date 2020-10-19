@@ -93,7 +93,7 @@
         {
             "rule": "initialize_only",
             "name": "frame_width",
-            "default_value": 0,
+            "default_value": 1280,
             "type": "int",
             "required": false,
             "valid": {
@@ -111,7 +111,7 @@
         {
             "rule": "initialize_only",
             "name": "frame_height",
-            "default_value": 0,
+            "default_value": 720,
             "type": "int",
             "required": false,
             "valid": {
@@ -129,7 +129,7 @@
         {
             "rule": "initialize_only",
             "name": "frame_interpolation",
-            "default_value": "BILINEAR",
+            "default_value": "FAST_BILINEAR",
             "type": "str",
             "required": false,
             "valid": {
@@ -148,7 +148,7 @@
         {
             "rule": "initialize_only",
             "name": "options",
-            "default_value": "",
+            "default_value": "rtsp_transport=tcp,fflags=nobuffer",
             "type": "csv",
             "required": false,
             "valid": {
@@ -257,7 +257,7 @@
         {
             "rule": "initialize_only",
             "name": "low_delay",
-            "default_value": false,
+            "default_value": true,
             "type": "bool",
             "required": false,
             "valid": {
@@ -275,7 +275,7 @@
         {
             "rule": "initialize_only",
             "name": "max_queue_size",
-            "default_value": 4,
+            "default_value": 2,
             "type": "int",
             "required": true,
             "valid": {
