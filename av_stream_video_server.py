@@ -5,12 +5,13 @@ import traceback
 import time
 import numpy as np
 
+from enum import Enum
 from multiprocessing.sharedctypes import Synchronized
 from multiprocessing import Queue
 from queue import Full, Empty
 
 EMPTY_IMAGE = np.zeros((300, 300, 3), dtype=np.uint8)
-DEFAULT_EXIT_TIMEOUT_SECONDS = 4.0
+DEFAULT_EXIT_TIMEOUT_SECONDS = 8.0
 RECONNECT_SLEEP = 1.0
 ITERATION_SLEEP = 0.001
 REFRESH_ERROR_THRESHOLD = 100
@@ -28,6 +29,10 @@ INTERPOLATION_LIST = [
     'LANCZOS',
     'SPLINE'
 ]
+
+SERVER_STATE_DONE = 0
+SERVER_STATE_OPENING = 1
+SERVER_STATE_RUNNING = 2  # This value can be changed in the server module.
 
 LOGGING_PREFIX = '[av.stream_video.server] '
 LOGGING_SUFFIX = '\n'
@@ -49,6 +54,10 @@ def opt_kwargs(kwargs, name, default_value=None):
     return kwargs[name]
 
 
+class NoneFramesException(Exception):
+    pass
+
+
 class StreamVideoServer:
     """
     """
@@ -58,6 +67,7 @@ class StreamVideoServer:
         self.queue: Queue = args[0]
 
         self.exit_flag: Synchronized = opt_kwargs(kwargs, 'exit_flag')
+        self.server_state: Synchronized = opt_kwargs(kwargs, 'server_state')
         self.refresh_flag: Synchronized = opt_kwargs(kwargs, 'refresh_flag')
 
         self.video_src: str = opt_kwargs(kwargs, 'video_src', '')
@@ -102,20 +112,68 @@ class StreamVideoServer:
 
         print_out(f'StreamVideoServer() constructor done')
 
+    def _put_nowait(self, data):
+        try:
+            self.queue.put_nowait(data)
+            return True
+        except Full:
+            return False
+
+    def _get_nowait(self):
+        try:
+            self.queue.get_nowait()
+        except Empty:
+            pass
+
+    def push(self, data):
+        if self._put_nowait(data):
+            return True
+        self._get_nowait()
+        return self._put_nowait(data)
+
+    def push_last_frame(self):
+        self.push(self.last_frame)
+
+    def _get_exit_flag(self):
+        with self.exit_flag.get_lock():
+            return self.exit_flag.value
+
+    def _get_refresh_flag(self):
+        with self.refresh_flag.get_lock():
+            return self.refresh_flag.value
+
+    def _set_refresh_flag(self, value: bool):
+        with self.refresh_flag.get_lock():
+            self.refresh_flag.value = value
+
+    def _set_server_state(self, value: int):
+        with self.server_state.get_lock():
+            self.server_state.value = value
+
     def open_video(self):
         print_out(f'StreamVideoServer.open_video(src={self.video_src},index={self.video_index})')
         try:
             import av
-            self.container = av.open(self.video_src,
-                                     options=self.options,
-                                     container_options=self.container_options,
-                                     stream_options=self.stream_options)
+            self.container = av.open(  # noqa
+                self.video_src,
+                options=self.options,
+                container_options=self.container_options,
+                stream_options=self.stream_options
+            )
             self.container.streams.video[self.video_index].thread_type = 'AUTO'  # Go faster!
             if self.low_delay:
                 self.container.streams.video[self.video_index].codec_context.flags = 'LOW_DELAY'
             self.frames = self.container.decode(video=self.video_index)
             if self.verbose:
                 print_out(f'StreamVideoServer.open_video() Video open success!')
+
+            # [WARNING]
+            # It takes a long time to acquire the first frame.
+            # Therefore, it changes the server state after acquiring the first frame.
+            self.read_next_frame()
+            self.push_last_frame()  # Don't miss the first frame!
+            self._set_server_state(SERVER_STATE_RUNNING)
+
             return True
         except Exception as e:
             print_error(f'StreamVideoServer.open_video() Exception: {e}')
@@ -136,10 +194,13 @@ class StreamVideoServer:
         self.frames = None
 
     def reopen_video(self):
+        self._set_server_state(SERVER_STATE_OPENING)
         self.close_video()
         return self.open_video()
 
     def read_next_frame(self):
+        if self.frames is None:
+            raise NoneFramesException
         frame = next(self.frames)
         self.last_frame = frame.to_ndarray(width=self.frame_width,
                                            height=self.frame_height,
@@ -147,41 +208,6 @@ class StreamVideoServer:
                                            interpolation=self.frame_interpolation)
         self.last_index = frame.index
         self.last_pts = frame.pts
-
-    def _put_nowait(self, data):
-        try:
-            self.queue.put_nowait(data)
-            return True
-        except Full:
-            return False
-
-    def _get_nowait(self):
-        try:
-            self.queue.get_nowait()
-        except Empty:
-            pass
-
-    def _get_exit_flag(self):
-        with self.exit_flag.get_lock():
-            return self.exit_flag.value
-
-    def _get_refresh_flag(self):
-        with self.refresh_flag.get_lock():
-            return self.refresh_flag.value
-
-    # def _set_exit_flag(self, value: bool):
-    #     with self.exit_flag.get_lock():
-    #         self.exit_flag.value = value
-
-    def _set_refresh_flag(self, value: bool):
-        with self.refresh_flag.get_lock():
-            self.refresh_flag.value = value
-
-    def push(self, data):
-        if self._put_nowait(data):
-            return True
-        self._get_nowait()
-        return self._put_nowait(data)
 
     def run(self):
         print_out('StreamVideoServer.run() BEGIN.')
@@ -218,7 +244,7 @@ class StreamVideoServer:
                 args_text = f'index={self.last_index},pts={self.last_pts},frame={self.last_frame.shape}'
                 print_out(f'StreamVideoServer.run() Push({args_text})')
 
-            self.push(self.last_frame)
+            self.push_last_frame()
             if self.iteration_sleep > 0:
                 time.sleep(self.iteration_sleep)
 

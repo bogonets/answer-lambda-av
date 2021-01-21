@@ -9,9 +9,9 @@ import psutil
 # import numpy as np
 
 from multiprocessing.sharedctypes import Value, Synchronized
-from ctypes import c_bool
+from ctypes import c_bool, c_int
 from multiprocessing import Process, Queue
-from queue import Full, Empty
+from queue import Empty
 
 import av_stream_video_server as vs
 
@@ -75,6 +75,18 @@ class CreateProcessError(Exception):
     pass
 
 
+class InaccessibleException(AssertionError):
+    pass
+
+
+class IllegalStateException(ValueError):
+    pass
+
+
+class NotReadyException(ValueError):
+    pass
+
+
 class NullDataException(TypeError):
     pass
 
@@ -107,6 +119,8 @@ class StreamVideo:
 
         self.process: Process = None  # noqa
         self.pid = UNKNOWN_PID
+
+        self.server_state: Synchronized = Value(c_int, vs.SERVER_STATE_DONE)
 
         self.exit_flag: Synchronized = Value(c_bool, False)
         self.queue: Queue = None  # noqa
@@ -180,13 +194,13 @@ class StreamVideo:
         elif key == 'refresh_error_threshold':
             return str(self.refresh_error_threshold)
 
-    # def _get_exit_flag(self):
-    #     with self.exit_flag.get_lock():
-    #         return self.exit_flag.value
+    def _get_server_state(self):
+        with self.server_state.get_lock():
+            return self.server_state.value
 
-    # def _get_refresh_flag(self):
-    #     with self.refresh_flag.get_lock():
-    #         return self.refresh_flag.value
+    def _set_server_state(self, value: int):
+        with self.server_state.get_lock():
+            self.server_state.value = value
 
     def _set_exit_flag(self, value: bool):
         with self.exit_flag.get_lock():
@@ -224,6 +238,7 @@ class StreamVideo:
 
         kwargs = {
             'exit_flag': self.exit_flag,
+            'server_state': self.server_state,
             'refresh_flag': self.refresh_flag,
             'video_src': self.video_src,
             'video_index': self.video_index,
@@ -243,12 +258,15 @@ class StreamVideo:
         self.queue = Queue(self.max_queue_size)
         self.process = Process(target=vs.start_app, args=(self.queue,), kwargs=kwargs)
 
+        self._set_server_state(vs.SERVER_STATE_OPENING)
         self.process.start()
+
         if self.process.is_alive():
             self.pid = self.process.pid
             print_out(f'StreamVideo._create_process_impl() Server process PID: {self.pid}')
             return True
         else:
+            self._set_server_state(vs.SERVER_STATE_DONE)
             print_error(f'StreamVideo._create_process_impl() Server process is not alive.')
             return False
 
@@ -260,13 +278,13 @@ class StreamVideo:
             return False
 
     def _close_process_impl(self):
+        self._set_exit_flag(True)
+
         if self.process is not None:
             timeout = self.exit_timeout_seconds
             if self.process.is_alive():
                 request_begin = time.time()
                 print_out(f'StreamVideo._close_process_impl() RequestExit(timeout={timeout}s)')
-
-                self._set_exit_flag(True)
 
                 timeout = timeout - (time.time() - request_begin)
                 timeout = timeout if timeout >= 0.0 else 0.0
@@ -287,12 +305,18 @@ class StreamVideo:
             self.queue = None
 
         if self.process is not None:
+            if self.process.is_alive():
+                self.process.terminate()
             self.process.close()
             self.process = None
 
         if self.pid >= 1:
             kill_process(self.pid)
             self.pid = UNKNOWN_PID
+
+        self._set_server_state(vs.SERVER_STATE_DONE)
+        self._set_exit_flag(False)
+        self._set_refresh_flag(False)
 
         assert self.queue is None
         assert self.process is None
@@ -338,6 +362,16 @@ class StreamVideo:
     def on_run(self):
         if self.is_reopen():
             self.reopen()
+
+        state = self._get_server_state()
+        if state == vs.SERVER_STATE_DONE:
+            raise IllegalStateException
+        elif state == vs.SERVER_STATE_OPENING:
+            raise NotReadyException
+        elif state == vs.SERVER_STATE_RUNNING:
+            pass  # OK!!
+        else:
+            raise InaccessibleException
 
         frame = self.get_last_image()
         if frame is None:
@@ -406,8 +440,11 @@ def main():
     while True:
         try:
             result = video.on_run()
-        except NullDataException as e:
-            print_error(f"on_run() exception: {e}")
+        except NotReadyException:
+            # print_error(f"on_run() not ready exception.")
+            continue
+        except NullDataException:
+            print_error(f"on_run() null data exception.")
             continue
 
         assert result is not None
