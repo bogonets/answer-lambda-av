@@ -5,7 +5,7 @@ import traceback
 import time
 import numpy as np
 
-from multiprocessing.sharedctypes import Value
+from multiprocessing.sharedctypes import Synchronized
 from multiprocessing import Queue
 from queue import Full, Empty
 
@@ -57,8 +57,8 @@ class StreamVideoServer:
         assert len(args) == 1
         self.queue: Queue = args[0]
 
-        self.exit_flag: Value = opt_kwargs(kwargs, 'exit_flag')
-        self.refresh_flag: Value = opt_kwargs(kwargs, 'refresh_flag')
+        self.exit_flag: Synchronized = opt_kwargs(kwargs, 'exit_flag')
+        self.refresh_flag: Synchronized = opt_kwargs(kwargs, 'refresh_flag')
 
         self.video_src: str = opt_kwargs(kwargs, 'video_src', '')
         self.video_index: int = opt_kwargs(kwargs, 'video_index', 0)
@@ -161,6 +161,22 @@ class StreamVideoServer:
         except Empty:
             pass
 
+    def _get_exit_flag(self):
+        with self.exit_flag.get_lock():
+            return self.exit_flag.value
+
+    def _get_refresh_flag(self):
+        with self.refresh_flag.get_lock():
+            return self.refresh_flag.value
+
+    # def _set_exit_flag(self, value: bool):
+    #     with self.exit_flag.get_lock():
+    #         self.exit_flag.value = value
+
+    def _set_refresh_flag(self, value: bool):
+        with self.refresh_flag.get_lock():
+            self.refresh_flag.value = value
+
     def push(self, data):
         if self._put_nowait(data):
             return True
@@ -172,16 +188,15 @@ class StreamVideoServer:
         if not self.is_opened_video():
             self.open_video()
 
-        while not self.exit_flag.value:
-
-            if self.refresh_flag:
+        while not self._get_exit_flag():
+            if self._get_refresh_flag():
                 print_out(f'StreamVideoServer.run() [REFRESH] -> Flag is is enabled.')
                 reconnect_result = self.reopen_video()
                 if reconnect_result:
                     print_out(f'StreamVideoServer.run() [REFRESH] -> reconnect success.')
                 else:
                     print_error(f'StreamVideoServer.run() [REFRESH] -> reconnect failure.')
-                self.refresh_flag = False
+                self._set_refresh_flag(False)
 
             # Read current frame.
             try:

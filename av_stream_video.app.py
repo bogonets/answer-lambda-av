@@ -8,7 +8,7 @@ import argparse
 import psutil
 # import numpy as np
 
-from multiprocessing.sharedctypes import Value
+from multiprocessing.sharedctypes import Value, Synchronized
 from ctypes import c_bool
 from multiprocessing import Process, Queue
 from queue import Full, Empty
@@ -103,13 +103,13 @@ class StreamVideo:
         self.exit_timeout_seconds: float = vs.opt_kwargs(kwargs, 'exit_timeout_seconds', vs.DEFAULT_EXIT_TIMEOUT_SECONDS)
 
         self.refresh_error_count = 0
-        self.refresh_flag = Value(c_bool, False)
+        self.refresh_flag: Synchronized = Value(c_bool, False)
 
-        self.process: Process = None
+        self.process: Process = None  # noqa
         self.pid = UNKNOWN_PID
 
-        self.exit_flag = Value(c_bool, False)
-        self.queue: Queue = None
+        self.exit_flag: Synchronized = Value(c_bool, False)
+        self.queue: Queue = None  # noqa
         self.last_image = None
 
     def on_set(self, key, val):
@@ -180,9 +180,25 @@ class StreamVideo:
         elif key == 'refresh_error_threshold':
             return str(self.refresh_error_threshold)
 
+    # def _get_exit_flag(self):
+    #     with self.exit_flag.get_lock():
+    #         return self.exit_flag.value
+
+    # def _get_refresh_flag(self):
+    #     with self.refresh_flag.get_lock():
+    #         return self.refresh_flag.value
+
+    def _set_exit_flag(self, value: bool):
+        with self.exit_flag.get_lock():
+            self.exit_flag.value = value
+
+    def _set_refresh_flag(self, value: bool):
+        with self.refresh_flag.get_lock():
+            self.refresh_flag.value = value
+
     def do_refresh_ok(self):
         self.refresh_error_count = 0
-        # self.refresh_flag = False  #
+        self._set_refresh_flag(False)
 
     def do_refresh_error(self):
         if self.refresh_error_count < self.refresh_error_threshold:
@@ -191,7 +207,7 @@ class StreamVideo:
                 print_out(f'StreamVideo.do_refresh_error({self.refresh_error_count}/{self.refresh_error_threshold})')
         else:
             self.refresh_error_count = 0
-            self.refresh_flag = True
+            self._set_refresh_flag(True)
             print_error(f'StreamVideo.do_refresh_error() Enable refresh_flag')
 
     def get_last_image(self):
@@ -249,7 +265,9 @@ class StreamVideo:
             if self.process.is_alive():
                 request_begin = time.time()
                 print_out(f'StreamVideo._close_process_impl() RequestExit(timeout={timeout}s)')
-                self.exit_flag = True
+
+                self._set_exit_flag(True)
+
                 timeout = timeout - (time.time() - request_begin)
                 timeout = timeout if timeout >= 0.0 else 0.0
 
