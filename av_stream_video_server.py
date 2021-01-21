@@ -174,7 +174,7 @@ class StreamVideoServer:
 
         while not self.exit_flag.value:
 
-            if self.refresh_flag.value:
+            if self.refresh_flag:
                 print_out(f'StreamVideoServer.run() [REFRESH] -> Flag is is enabled.')
                 reconnect_result = self.reopen_video()
                 if reconnect_result:

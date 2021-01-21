@@ -6,7 +6,7 @@ import sys
 import time
 import argparse
 import psutil
-import numpy as np
+# import numpy as np
 
 from multiprocessing.sharedctypes import Value
 from ctypes import c_bool
@@ -20,6 +20,7 @@ LOGGING_PREFIX = '[av.stream_video] '
 LOGGING_SUFFIX = '\n'
 UNKNOWN_PID = 0
 DEFAULT_MAX_QUEUE_SIZE = 4
+DEFAULT_VIDEO_FPS = 12
 
 
 def print_out(message):
@@ -357,5 +358,53 @@ def on_destroy():
     return MAIN_HANDLER.on_destroy()
 
 
+def main():
+    parser = argparse.ArgumentParser(description='RealTimeVideo demo')
+    parser.add_argument(
+        '--url',
+        default="rtsp://0.0.0.0:8554/live.sdp",
+        help='RTSP URL.'),
+    parser.add_argument(
+        '--fps',
+        type=int,
+        default=DEFAULT_VIDEO_FPS,
+        help=f'WebRTC Video FPS (default: {DEFAULT_VIDEO_FPS})')
+    parser.add_argument(
+        '--verbose',
+        '-v',
+        action='store_true')
+    args = parser.parse_args()
+
+    global LOGGING_SUFFIX
+    LOGGING_SUFFIX = '\n'
+    vs.LOGGING_SUFFIX = '\n'
+
+    video = StreamVideo(video_src=args.url,
+                        verbose=args.verbose)
+    video.on_init()
+
+    import cv2
+    import time
+    while True:
+        try:
+            result = video.on_run()
+        except NullDataException as e:
+            print_error(f"on_run() exception: {e}")
+            continue
+
+        assert result is not None
+        frame = result['frame']
+        if frame is None:
+            print_error("frame is empty.")
+            continue
+
+        cv2.imshow("Preview", frame)
+        time.sleep(1.0/args.fps)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    video.on_destroy()
+
+
 if __name__ == '__main__':
-    pass
+    main()
