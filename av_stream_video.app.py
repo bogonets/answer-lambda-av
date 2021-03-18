@@ -6,7 +6,7 @@ import sys
 import time
 import argparse
 import psutil
-# import numpy as np
+import numpy as np
 
 from multiprocessing.sharedctypes import Value, Synchronized
 from ctypes import c_bool, c_int
@@ -206,6 +206,10 @@ class StreamVideo:
         with self.exit_flag.get_lock():
             self.exit_flag.value = value
 
+    def _get_exit_flag(self):
+        with self.exit_flag.get_lock():
+            return self.exit_flag.value
+
     def _set_refresh_flag(self, value: bool):
         with self.refresh_flag.get_lock():
             self.refresh_flag.value = value
@@ -223,14 +227,38 @@ class StreamVideo:
             self.refresh_error_count = 0
             self._set_refresh_flag(True)
             print_error(f'StreamVideo.do_refresh_error() Enable refresh_flag')
+            return self.last_image
+
+    def do_refresh_error_v2(self):
+        """
+        Fix: camera power off -> and power on case ...
+        """
+
+        if self.refresh_error_count < self.refresh_error_threshold:
+            self.refresh_error_count += 1
+            if self.verbose:
+                print_out(f'StreamVideo.do_refresh_error_v2({self.refresh_error_count}/{self.refresh_error_threshold})')
+        else:
+            self.refresh_error_count = 0
+            self.last_image = self.get_empty_image(self.last_image)
+            self._set_refresh_flag(True)
+            if not self._get_exit_flag():
+                # assert self.process is not None
+                self.process.kill()
+            print_error(f'StreamVideo.do_refresh_error_v2() Enable refresh_flag')
+            return self.last_image
 
     def get_last_image(self):
         try:
             self.last_image = self.queue.get_nowait()
             self.do_refresh_ok()
         except Empty:
-            self.do_refresh_error()
+            # self.do_refresh_error()
+            self.do_refresh_error_v2()
         return self.last_image
+
+    def get_empty_image(self, image):
+        return np.zeros((image.shape[0], image.shape[1], image.shape[2]), np.uint8)
 
     def _create_process_impl(self):
         assert self.queue is None

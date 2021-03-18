@@ -1,13 +1,13 @@
 {
     "info": {
         "name": "av_stream_video",
-        "version": "1.1.4",
+        "version": "1.1.5",
         "category": "av",
         "keywords": ["av"],
         "homepage": "https://answer.bogonets.com/",
         "bugs": "https://answer.bogonets.com/",
         "license": "Bogonet License",
-        "author": "zer0",
+        "author": "zer0,sunhongyi",
         "dependencies": [
             {"type": "pip", "src": "numpy"},
             {"type": "pip", "src": "av"},
